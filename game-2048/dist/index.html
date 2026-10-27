@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f7f2" />
+    <meta name="description" content="一格 · 2048。滑动、合并，让小数字慢慢长大。一个支持键盘和触屏、自动存档的轻松小游戏。" />
+    <title>一格 · 2048 — 每一步，都有可能</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="engine.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <symbol id="icon-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" /></symbol>
+      <symbol id="icon-reset" viewBox="0 0 24 24"><path d="M3 10a9 9 0 1 1 2 8M3 4v6h6" /></symbol>
+      <symbol id="icon-undo" viewBox="0 0 24 24"><path d="M9 5 3 11l6 6M3 11h11a6 6 0 0 1 6 6v2" /></symbol>
+      <symbol id="icon-crown" viewBox="0 0 24 24"><path d="m3 6 4 4 5-6 5 6 4-4-2 12H5L3 6ZM7 21h10" /></symbol>
+      <symbol id="icon-keyboard" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="3" /><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M7 15h10" /></symbol>
+      <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6" /></symbol>
+    </svg>
+
+    <div class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="./" aria-label="一格首页">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          <span>一格<span class="brand-period">.</span></span>
+        </a>
+        <span class="header-label">给大脑，一点留白</span>
+        <span class="header-tag"><span></span> 随时玩一局</span>
+      </header>
+
+      <main class="main-layout">
+        <section class="intro" aria-labelledby="game-title">
+          <div class="eyebrow"><span class="eyebrow-line"></span> LITTLE GAME, BIG POSSIBILITIES</div>
+          <h1 id="game-title">2048<span class="title-dot">.</span></h1>
+          <h2>每一步，都有可能。</h2>
+          <p class="intro-copy">让相同的数字相遇，<br />把小小的 <strong>2</strong>，变成大大的 <strong>2048</strong>。</p>
+
+          <div class="merge-demo" aria-label="两个 2 合并为 4">
+            <span class="demo-tile">2</span><span class="demo-plus">+</span><span class="demo-tile">2</span>
+            <svg class="icon demo-arrow"><use href="#icon-arrow" /></svg><span class="demo-tile demo-result">4</span>
+            <span class="demo-spark" aria-hidden="true">✳</span>
+          </div>
+
+          <div class="how-to" id="how-to">
+            <h3><span class="tiny-square"></span> 很简单，这样玩</h3>
+            <p>用 <strong>方向键 / WASD</strong> 移动方块，<br />在手机上，直接 <strong>上下左右滑动</strong>。</p>
+            <p>相同数字碰到一起就会合并。<br />合出 <strong>2048</strong>，就是你的胜利时刻。</p>
+            <div class="keyboard" aria-hidden="true"><span>←</span><span>↑</span><span>↓</span><span>→</span><small>滑动 · 合并 · 再来一步</small></div>
+          </div>
+          <p class="gentle-note"><span>☀</span> 没有倒计时，按自己的节奏来。</p>
+        </section>
+
+        <section class="game" aria-label="2048 游戏">
+          <div class="game-heading">
+            <div class="score-card"><span class="score-label">当前得分</span><span class="score-value" id="score">0</span><span class="score-gain" id="score-gain" aria-hidden="true"></span></div>
+            <div class="score-card best-card"><span class="score-label"><svg class="icon"><use href="#icon-crown" /></svg> 最高纪录</span><span class="score-value" id="best">0</span></div>
+            <span class="game-edition">THE ORIGINAL<br /><strong>4 × 4</strong></span>
+          </div>
+
+          <div class="board" id="board" tabindex="0" aria-label="2048 棋盘，使用方向键移动" aria-describedby="how-to">
+            <div class="board-grid" id="board-grid" role="grid" aria-label="4 行 4 列的数字棋盘"></div>
+            <div class="tile-layer" id="tile-layer" aria-hidden="true"></div>
+            <div class="game-overlay" id="game-overlay" hidden>
+              <div class="overlay-content">
+                <span class="overlay-badge" id="overlay-badge">✳</span>
+                <h2 id="overlay-title">你做到了！</h2>
+                <p id="overlay-description">2048，只是新的开始。</p>
+                <button class="button button-primary" id="overlay-primary" type="button">继续挑战 <svg class="icon"><use href="#icon-arrow" /></svg></button>
+                <button class="button button-text" id="overlay-secondary" type="button">再玩一局</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="game-actions">
+            <button class="button button-undo" id="undo" type="button" disabled title="撤销上一步（Z）"><svg class="icon"><use href="#icon-undo" /></svg> 撤销一步</button>
+            <button class="button button-primary" id="restart" type="button"><svg class="icon"><use href="#icon-reset" /></svg> 新的一局</button>
+          </div>
+          <div class="game-meta"><span id="move-count">第 0 步</span><span class="save-status" id="save-status"><span></span> 进度自动保存</span></div>
+          <div class="board-hint"><svg class="icon"><use href="#icon-keyboard" /></svg><span>方向键移动<span class="hint-divider">/</span>Z 撤销<span class="hint-divider">/</span>R 重新开始</span></div>
+        </section>
+      </main>
+
+      <footer class="site-footer"><span>小小一格，刚好放下片刻专注。</span><span>MADE FOR A LITTLE BREAK <span class="footer-star">✳</span></span></footer>
+    </div>
+
+    <dialog id="restart-dialog" class="restart-dialog" aria-labelledby="dialog-title">
+      <form method="dialog">
+        <button class="dialog-close" value="cancel" aria-label="关闭"><svg class="icon"><use href="#icon-close" /></svg></button>
+        <span class="dialog-eyebrow">A FRESH START</span>
+        <h2 id="dialog-title">准备好新的一局了？</h2>
+        <p>当前棋盘将会重置，最高纪录会保留。</p>
+        <div class="dialog-actions"><button class="button button-undo" value="cancel" autofocus>再想想</button><button class="button button-primary" value="restart">开始新的一局</button></div>
+      </form>
+    </dialog>
+    <div class="sr-only" id="announcement" role="status" aria-live="polite" aria-atomic="true"></div>
+    <noscript><p class="noscript">请启用 JavaScript 后开始游戏。</p></noscript>
+  </body>
+</html>
