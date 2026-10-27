@@ -67,12 +67,15 @@ function fixture({ tiles = [2, 2, 4], score = 0, moves = 0, continued = false, s
   context.window = context;
   vm.createContext(context);
   scripts.forEach((source) => vm.runInContext(source, context));
+  const flushFrames = () => {
+    for (const [id, callback] of [...frames]) { frames.delete(id); callback(); }
+  };
   return {
-    get, data, document,
+    get, data, document, flushFrames,
     state: () => JSON.parse(data.get("yige-2048-v1")),
     key(key, extra = {}) { let prevented = false; listeners.get("keydown")({ key, target: new Element(), preventDefault() { prevented = true; }, ...extra }); return prevented; },
     flushAnimation() {
-      for (const [id, callback] of [...frames]) { frames.delete(id); callback(); }
+      flushFrames();
       for (const [id, callback] of [...timers]) { timers.delete(id); callback(); }
     },
   };
@@ -93,6 +96,7 @@ test("keyboard movement updates score, storage and undo; Z restores them", () =>
   assert.equal(app.state().state.score, 4);
   assert.equal(app.get("score").textContent, "4");
   assert.equal(app.get("undo").disabled, false);
+  assert.equal(app.get("effects-layer").children.length, 0);
   app.key("z");
   assert.equal(app.state().state.score, 0);
   assert.deepEqual(app.state().state.board.slice(0, 3), [2, 2, 4]);
@@ -185,4 +189,74 @@ test("animation blocks overlapping input and completes with the updated board", 
   assert.equal(app.get("score").textContent, "4");
   app.key("z");
   assert.equal(app.state().state.moves, 0);
+});
+
+test("tiles stay visible while sliding and merge only after arriving", () => {
+  const app = fixture({ reducedMotion: false });
+  const layer = app.get("tile-layer");
+  const originalTiles = [...layer.children];
+  app.key("ArrowLeft");
+  originalTiles.forEach((tile, index) => assert.equal(layer.children[index], tile));
+  assert.equal(originalTiles[1].dataset.index, 1);
+  assert.equal(app.get("score").textContent, "0");
+
+  app.flushFrames();
+  assert.equal(originalTiles[1].dataset.index, 0);
+  assert.equal(originalTiles[1].classes.has("sliding"), true);
+  assert.equal(layer.children[0].textContent, "2");
+  assert.equal(app.get("undo").disabled, true);
+
+  originalTiles[1].fire("transitionend", { propertyName: "transform" });
+  assert.equal(layer.children[0].textContent, "4");
+  assert.match(layer.children[0].className, /\bmerged\b/);
+  assert.equal(app.get("score").textContent, "4");
+  assert.equal(app.get("undo").disabled, false);
+  app.key("ArrowRight");
+  assert.equal(app.state().state.moves, 2);
+});
+
+test("slides reach the correct cell with a trail behind each direction", () => {
+  for (const [key, destination, trailX, trailY] of [
+    ["ArrowLeft", 4, "20px", "0px"],
+    ["ArrowRight", 7, "-26px", "0px"],
+    ["ArrowUp", 1, "0px", "20px"],
+    ["ArrowDown", 13, "0px", "-26px"],
+  ]) {
+    const app = fixture({ tiles: [0, 0, 0, 0, 0, 2], reducedMotion: false });
+    const tile = app.get("tile-layer").children[0];
+    app.key(key);
+    app.flushFrames();
+    assert.equal(tile.dataset.index, destination, key);
+    assert.equal(tile.styles["--trail-x"], trailX, key);
+    assert.equal(tile.styles["--trail-y"], trailY, key);
+    tile.fire("transitionend", { propertyName: "transform" });
+    assert.equal(app.get("undo").disabled, false, key);
+    assert.equal(app.state().state.board[destination], 2, key);
+  }
+});
+
+test("merge particles clear on undo and expire without changing saved progress", () => {
+  const app = fixture({ reducedMotion: false });
+  const finishMerge = () => {
+    const movingTile = app.get("tile-layer").children[1];
+    app.key("ArrowLeft");
+    app.flushFrames();
+    movingTile.fire("transitionend", { propertyName: "transform" });
+  };
+
+  finishMerge();
+  assert.equal(app.get("effects-layer").children.length, 1);
+  assert.equal(app.get("effects-layer").children[0].children.length, 8);
+  assert.equal(app.get("board").classes.has("impact"), true);
+  app.key("z");
+  assert.equal(app.state().state.moves, 0);
+  assert.equal(app.get("effects-layer").children.length, 0);
+  assert.equal(app.get("board").classes.has("impact"), false);
+
+  finishMerge();
+  const saved = app.state();
+  app.flushAnimation();
+  assert.equal(app.get("effects-layer").children.length, 0);
+  assert.equal(app.get("board").classes.has("impact"), false);
+  assert.deepEqual(app.state(), saved);
 });

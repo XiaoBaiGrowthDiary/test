@@ -3,9 +3,11 @@
 
   const STORAGE_KEY = "yige-2048-v1";
   const BEST_KEY = "yige-2048-best";
+  const SLIDE_DURATION = 210;
   const $ = (id) => document.getElementById(id);
   const board = $("board");
   const layer = $("tile-layer");
+  const effects = $("effects-layer");
   const grid = $("board-grid");
   const overlay = $("game-overlay");
   const dialog = $("restart-dialog");
@@ -17,9 +19,12 @@
   let animationTimer = null;
   let animationFrame = null;
   let scoreTimer = null;
+  let effectsTimer = null;
   let pointerStart = null;
   let multiplePointers = false;
   const activePointers = new Set();
+
+  layer.style.setProperty("--slide-duration", `${SLIDE_DURATION}ms`);
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -70,6 +75,7 @@
     const tile = document.createElement("div");
     tile.className = `tile ${className}${value > 2048 ? " tile-large" : ""}${value > 32768 ? " tile-huge" : ""}`;
     tile.dataset.value = value;
+    tile.style.setProperty("--fx-hue", effectHue(value));
     positionTile(tile, index);
     const number = document.createElement("div");
     number.className = "tile-number";
@@ -79,8 +85,48 @@
   }
 
   function positionTile(tile, index) {
+    tile.dataset.index = index;
     tile.style.setProperty("--x", index % 4);
     tile.style.setProperty("--y", Math.floor(index / 4));
+  }
+
+  function effectHue(value) { return (150 + Math.log2(value) * 37) % 360; }
+
+  function clearEffects() {
+    clearTimeout(effectsTimer);
+    effectsTimer = null;
+    effects.replaceChildren();
+    board.classList.remove("impact");
+  }
+
+  function showMergeEffects(indices) {
+    clearEffects();
+    if (reducedMotion.matches || !indices.length) return;
+
+    indices.forEach((index) => {
+      const burst = document.createElement("div");
+      burst.className = "merge-burst";
+      positionTile(burst, index);
+      burst.style.setProperty("--fx-hue", effectHue(game.board[index]));
+
+      for (let particle = 0; particle < 8; particle++) {
+        const spark = document.createElement("i");
+        const angle = particle * Math.PI / 4 + index * .17;
+        spark.className = "merge-particle";
+        spark.style.setProperty("--dx", Math.cos(angle).toFixed(3));
+        spark.style.setProperty("--dy", Math.sin(angle).toFixed(3));
+        spark.style.setProperty("--spin", `${particle * 65}deg`);
+        spark.style.setProperty("--hue-shift", particle * 12);
+        burst.append(spark);
+      }
+      effects.append(burst);
+    });
+
+    board.style.setProperty("--impact", indices.length > 1 ? "3px" : "1.8px");
+    // Restart the impact even when merges happen in consecutive moves.
+    void board.offsetWidth;
+    board.classList.add("impact");
+    effectsTimer = setTimeout(clearEffects, 650);
   }
 
   function render({ spawnIndex = null, mergedIndices = [] } = {}) {
@@ -136,6 +182,7 @@
     animationTimer = null;
     busy = false;
     render(result);
+    showMergeEffects(result.mergedIndices);
     showGain(result.score);
     if (!game.over && !game.paused) announce(`第 ${game.moves} 步，得分 ${game.score}。`);
   }
@@ -149,23 +196,46 @@
     $("undo").disabled = true;
     if (reducedMotion.matches) { finishAnimation(result); return; }
 
-    layer.replaceChildren();
-    const movingTiles = result.movements.map(({ from, value }) => {
-      const tile = makeTile(value, from);
-      layer.append(tile);
-      return tile;
+    // Keep the visible tiles so their movement starts exactly where they are.
+    const tilesByIndex = new Map(Array.from(layer.children, (tile) => [Number(tile.dataset.index), tile]));
+    const movingTiles = result.movements.map(({ from, to }) => {
+      const tile = tilesByIndex.get(from);
+      tile.classList.remove("spawn");
+      tile.classList.remove("merged");
+      const travelX = from % 4 - to % 4;
+      const travelY = Math.floor(from / 4) - Math.floor(to / 4);
+      const dx = Math.sign(travelX);
+      const dy = Math.sign(travelY);
+      const trailLength = 14 + Math.min(3, Math.abs(travelX) + Math.abs(travelY)) * 6;
+      tile.style.setProperty("--trail-x", `${dx * trailLength}px`);
+      tile.style.setProperty("--trail-y", `${dy * trailLength}px`);
+      tile.style.setProperty("--stretch-x", dx ? "1.12" : ".92");
+      tile.style.setProperty("--stretch-y", dy ? "1.12" : ".92");
+      tile.style.setProperty("--tilt", `${(dx || -dy) * 3}deg`);
+      return { tile, to, moving: from !== to };
     });
+
+    const firstMovingTile = movingTiles.find(({ moving }) => moving).tile;
+    firstMovingTile.addEventListener("transitionend", (event) => {
+      if (event.target === firstMovingTile && event.propertyName === "transform") finishAnimation(result);
+    }, { once: true });
+
     // Commit the initial positions before transitioning to their destinations.
     void layer.offsetWidth;
     animationFrame = requestAnimationFrame(() => {
       animationFrame = null;
-      result.movements.forEach(({ to }, index) => positionTile(movingTiles[index], to));
-      animationTimer = setTimeout(() => finishAnimation(result), 135);
+      movingTiles.forEach(({ tile, to, moving }) => {
+        if (moving) tile.classList.add("sliding");
+        positionTile(tile, to);
+      });
+      // Also release input when a browser suppresses transition events.
+      animationTimer = setTimeout(() => finishAnimation(result), SLIDE_DURATION + 80);
     });
   }
 
   function undo() {
     if (busy || dialog.open || !game.undo()) return;
+    clearEffects();
     clearTimeout(scoreTimer);
     $("score-gain").textContent = "";
     persist();
@@ -177,6 +247,7 @@
     if (animationFrame !== null) cancelAnimationFrame(animationFrame);
     clearTimeout(animationTimer);
     clearTimeout(scoreTimer);
+    clearEffects();
     busy = false;
     animationFrame = null;
     animationTimer = null;
