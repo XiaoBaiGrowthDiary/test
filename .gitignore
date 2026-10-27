@@ -1,0 +1,14 @@
+# 本地打包文件
+*.zip
+*.tar.gz
+*.tgz
+
+# 依赖、日志与临时产物
+node_modules/
+*.log
+artifacts/
+.DS_Store
+Thumbs.db
+
+# 本地站点托管配置
+**/.openai/
